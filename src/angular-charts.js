@@ -421,7 +421,7 @@ angular.module('angularCharts').directive('acChart', function($templateCache, $c
           .data(function(d) { return d.nicedata; })
         .enter().append("text");
           
-      barsText.attr("y", function(d) { return y0(d.y) + y0.rangeBand()/2; })
+      barsText.attr("y", function(d) { return y0.rangeBand()/2; })
         .attr("dy", ".36em")
         .attr("x", 0)
       .transition()
