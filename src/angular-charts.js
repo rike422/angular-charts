@@ -156,6 +156,7 @@ angular.module('angularCharts').directive('acChart', function($templateCache, $c
         'area': areaChart,
         'point': pointChart,
         'hBar' : hBarChart,
+        'sBar' : sBarChart,
       }
       return charts[type];
     }
@@ -324,7 +325,7 @@ angular.module('angularCharts').directive('acChart', function($templateCache, $c
     }
 
     /**
-     * Draws a horizontal bar chart, grouped with negative value handling
+     * Draws a horizontal bar chart
      * @return {[type]} [description]
      */
     function hBarChart() {
@@ -453,19 +454,158 @@ angular.module('angularCharts').directive('acChart', function($templateCache, $c
         config.click.call(d, d3.event);
         scope.$apply();
       });
+    }
+
+    /**
+     * Draws a stacked bar chart
+     * @return {[type]} [description]
+     */
+    function sBarChart() {
+      /**
+       * Setup date attributes
+       * @type {Object}
+       */
+      var margin = {top: 0, right: 20, bottom: 30, left: 40};
+          width -=  margin.left + margin.right;
+          height -= margin.top + margin.bottom;
+
+      var x = d3.scale.ordinal()
+          .rangeRoundBands([0, width], .1);
+
+      var y = d3.scale.linear()
+          .range([height, 10]);
+      
+      var yData = [0];
+
+      points.forEach(function(d) {
+        var ySum = 0;
+        d.nicedata = d.y.map(function(e, i) {
+          var data = 
+          {
+            x  : d.x,
+            y  : e,
+            y0 : ySum,
+            s  : i,
+            tooltip: angular.isArray(d.tooltip) ? d.tooltip[i] : d.tooltip,
+          }
+          ySum += e;
+          return data;
+        })
+        yData.push(ySum);
+      })
+
+      var yMaxPoints = d3.max(points.map(function(d){ return d.y.length; }));
+
+      scope.yMaxData = yMaxPoints;
+
+      x.domain(points.map(function(d) { return d.x; }));
+      var padding = d3.max(yData) * 0.20;
+
+      y.domain([d3.min(yData), d3.max(yData) + padding]);
+
+      /**
+       * Create scales using d3
+       * @type {[type]}
+       */
+      var xAxis = d3.svg.axis()
+          .scale(x)
+          .orient("bottom");
+      filterXAxis(xAxis, x);
+
+      var yAxis = d3.svg.axis()
+          .scale(y)
+          .orient("left")
+          .ticks(10)
+          .tickFormat(d3.format('s'));
+
+      /**
+       * Start drawing the chart!
+       * @type {[type]}
+       */
+      var svg = d3.select(chartContainer[0]).append("svg")
+          .attr("width", width + margin.left + margin.right)
+          .attr("height", height + margin.top + margin.bottom)
+        .append("g")
+          .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+      svg.append("g")
+          .attr("class", "x axis")
+          .attr("transform", "translate(0," + height + ")")
+          .call(xAxis);
+
+      svg.append("g")
+          .attr("class", "y axis")
+          .call(yAxis);
+     
+     /**
+      * Add bars
+      * @type {[type]}
+      */
+      var barGroups = svg.selectAll(".state")
+          .data(points)
+        .enter().append("g")
+          .attr("class", "g")
+          .attr("transform", function(d) { return "translate(" + x(d.x) + ",0)"; });
+
+      var bars = barGroups.selectAll("rect")
+          .data(function(d) { return d.nicedata; })
+        .enter().append("rect");
+          
+      bars.attr("width", x.rangeBand());
+        
+      bars.attr("x", function(d, i) { return x(i); })
+        .attr("y", height)
+        .style("fill", function(d) { return getColor(d.s); })
+        .attr("height", 0)
+      .transition()
+        .ease("cubic-in-out")
+        .duration(1000)
+        .attr("y", function(d) { return y(Math.max(0, d.y + d.y0)); })
+        .attr("height", function(d) { return Math.abs(y(d.y) - y(0)); });  
+      /**
+       * Add events for tooltip
+       * @param  {[type]} d [description]
+       * @return {[type]}   [description]
+       */
+      bars.on("mouseover", function(d) { 
+        makeToolTip({ value: d.y, series: series[d.s], index: d.x}, d3.event);
+        config.mouseover(d, d3.event);
+        scope.$apply();
+      })
+      .on("mouseleave", function(d) {  
+        removeToolTip();
+        config.mouseout(d, d3.event);
+        scope.$apply();
+      })
+      .on("mousemove", function(d) {  
+         updateToolTip(d3.event);
+      })
+      .on("click", function(d) {
+        config.click.call(d, d3.event);
+        scope.$apply();
+      });
 
       /**
        * Create labels
        */
-      // if(config.labels) {
-      //   barGroups.selectAll('not-a-class')
-      //   .data(function(d){ return d.nicedata; })
-      // .enter().append("text")
-      //   .attr("x", function(d, i) { return x0(i); })
-      //   .attr("y", function(d) { return height - Math.abs(y(d.y) - y(0)); })
-      //   // .attr("transform", "rotate(270)")
-      //   .text(function(d) {return d.y; });    
-      // }
+      if(config.labels) {
+        barGroups.selectAll('not-a-class')
+        .data(function(d){ return d.nicedata; })
+      .enter().append("text")
+        .attr("x", function(d, i) { return x(i); })
+        .attr("y", function(d) { return height - Math.abs(y(d.y) - y(0)); })
+        // .attr("transform", "rotate(270)")
+        .text(function(d) {return d.y; });    
+      }
+
+      /**
+       * Draw one zero line in case negative values exist
+       */
+      svg.append("line")
+        .attr("x1", width)
+        .attr("y1", y(0))
+        .attr("y2", y(0))
+        .style("stroke", "silver");
     }
 
     /**
@@ -1009,6 +1149,7 @@ angular.module('angularCharts').directive('acChart', function($templateCache, $c
         });
       }
       if(chartType == 'bar' || chartType == 'area' || chartType == 'point' ||
+        chartType == 'hBar' || chartType == 'sBar' ||
         (chartType == 'line' && config.lineLegend === 'traditional')) {
         angular.forEach(series, function(value, key){
           scope.legends.push({color : config.colors[key], title: value});
