@@ -52,6 +52,7 @@ angular.module('angularCharts').directive('acChart', function($templateCache, $c
       mouseout: function() {},
       click: function() {},
       drag: function() {},
+      brush: function() {},
       legend: {
         display: true,
         //could be 'left, right'
@@ -283,93 +284,138 @@ angular.module('angularCharts').directive('acChart', function($templateCache, $c
         .attr("y", function(d) { return y(Math.max(0, d.y)); })
         .attr("height", function(d) { return Math.abs(y(d.y) - y(0)); });  
 
-      var drag = d3.behavior.drag()
-        .on("drag", function(d, i) {
-          var selection = d3.selectAll('.selected');
-          if (selection[0].indexOf(this) == -1) {
-            selection.classed("selected", false);
-            selection = d3.select(this);
-            selection.classed("selected", true);
-          }
-          d3.event.sourceEvent.stopPropagation();
-        });
-      svg.call(drag);
+      var brush = d3.svg.brush()
+        .x(x)
+        .on("brushend", function () {
+          if (!d3.event.sourceEvent) return;
+          var extent = brush.extent();
+          var range = x.range();
+          var newExtent = [
+            Math.max(extent[0], range[0]),
+            extent[1]
+          ];
+          var result = [];
 
-      svg
-      .on("mousedown", function () {
-        var p = d3.mouse(this);
-        svg.append("rect")
-          .attr({
-            rx      : 6,
-            ry      : 6,
-            class   : "selection",
-            x       : p[0],
-            y       : p[1],
-            width   : 0,
-            height  : 0
-          })
-      })
-      .on("mousemove", function() {
-        var s = svg.select("rect.selection");
-        if(!s.empty()) {
-          var p = d3.mouse(this);
-          var d = {
-            x       : s.attr("x"),
-            y       : s.attr("y"),
-            width   : s.attr("width"),
-            height  : s.attr("height")
-          };
-          var move = {
-            x : p[0] - d.x,
-            y : p[1] - d.y
-          };
-
-          if(move.x < 1 || (move.x * 2 < d.width)) {
-            d.x = p[0];
-            d.width -= move.x;
-          } else {
-            d.width = move.x;       
-          }
-          if(move.y < 1 || (move.y * 2 < d.height)) {
-            d.y = p[1];
-            d.height -= move.y;
-          } else {
-            d.height = move.y;       
-          }
-          s.attr(d);
-          var xMin = s.attr("x") - margin.left
-          var xMax = xMin + parseFloat(s.attr("width"))
-
-          svg.selectAll('g.g.selected')
-              .classed("selected", false)
-            .selectAll("rect")
-              .style("fill", function(d) { return getColor(d.s); })
-          svg.selectAll('g.g').each( function(d, i) {
-            var x = d3.select(this).attr("x");
-            if ( 
-                !d3.select(this).classed("selected") && 
-                x >= xMin && x <= xMax
-            ) {
-              d3.select(this)
-                .classed("selected", true)
-              .selectAll("rect")
-                .style("fill", config.highlight)
+          var previous = 0;
+          var topPoint = extent[1];
+          range.forEach(function (value) {
+            if (extent[0] > previous && extent[0] < value) {
+              newExtent[0] = previous;
             }
+            if (extent[1] > previous && extent[1] < value) {
+              topPoint = previous;
+              newExtent[1] = value;
+            }
+            previous = value;
           });
-        }
-      })
-      .on("mouseup", function() {
-          svg.selectAll("rect.selection").remove();
-          var selected = [];
-          svg.selectAll("g.g.selected").each(function (d, i) {
-            selected.push(d);
-          });
-          config.drag(selected, d3.event);
-      })
-      .on("mouseout", function() {
-          if(d3.event.relatedTarget.tagName=='HTML') { svg.selectAll( "rect.selection").remove();
+          if (extent[1] > range[range.length-1]) {
+            topPoint = range[range.length-1];
+            newExtent[1] = range[range.length-1] + x.rangeBand();
           }
-      });
+          result.push(svg.select('g[x="' + newExtent[0] + '"]').data()[0]);
+          result.push(svg.select('g[x="' + topPoint + '"]').data()[0]);
+
+
+          d3.select(this).transition()
+            .call(brush.extent(newExtent))
+            .call(brush.event)
+
+          config.brush(result, d3.event);
+        })
+
+      gTrans.append("g")
+        .attr("class", "brush")
+        .call(brush)
+      .selectAll("rect")
+        .attr("height", height-2)
+
+      // var drag = d3.behavior.drag()
+      //   .on("drag", function(d, i) {
+      //     var selection = d3.selectAll('.selected');
+      //     if (selection[0].indexOf(this) == -1) {
+      //       selection.classed("selected", false);
+      //       selection = d3.select(this);
+      //       selection.classed("selected", true);
+      //     }
+      //     d3.event.sourceEvent.stopPropagation();
+      //   });
+      // svg.call(drag);
+
+      // svg
+      // .on("mousedown", function () {
+      //   var p = d3.mouse(this);
+      //   svg.append("rect")
+      //     .attr({
+      //       rx      : 6,
+      //       ry      : 6,
+      //       class   : "selection",
+      //       x       : p[0],
+      //       y       : p[1],
+      //       width   : 0,
+      //       height  : 0
+      //     })
+      // })
+      // .on("mousemove", function() {
+      //   var s = svg.select("rect.selection");
+      //   if(!s.empty()) {
+      //     var p = d3.mouse(this);
+      //     var d = {
+      //       x       : s.attr("x"),
+      //       y       : s.attr("y"),
+      //       width   : s.attr("width"),
+      //       height  : s.attr("height")
+      //     };
+      //     var move = {
+      //       x : p[0] - d.x,
+      //       y : p[1] - d.y
+      //     };
+
+      //     if(move.x < 1 || (move.x * 2 < d.width)) {
+      //       d.x = p[0];
+      //       d.width -= move.x;
+      //     } else {
+      //       d.width = move.x;       
+      //     }
+      //     if(move.y < 1 || (move.y * 2 < d.height)) {
+      //       d.y = p[1];
+      //       d.height -= move.y;
+      //     } else {
+      //       d.height = move.y;       
+      //     }
+      //     s.attr(d);
+      //     var xMin = s.attr("x") - margin.left
+      //     var xMax = xMin + parseFloat(s.attr("width"))
+
+      //     svg.selectAll('g.g.selected')
+      //         .classed("selected", false)
+      //       .selectAll("rect")
+      //         .style("fill", function(d) { return getColor(d.s); })
+      //     svg.selectAll('g.g').each( function(d, i) {
+      //       var x = d3.select(this).attr("x");
+      //       if ( 
+      //           !d3.select(this).classed("selected") && 
+      //           x >= xMin && x <= xMax
+      //       ) {
+      //         d3.select(this)
+      //           .classed("selected", true)
+      //         .selectAll("rect")
+      //           .style("fill", config.highlight)
+      //       }
+      //     });
+      //   }
+      // })
+      // .on("mouseup", function() {
+      //     svg.selectAll("rect.selection").remove();
+      //     var selected = [];
+      //     svg.selectAll("g.g.selected").each(function (d, i) {
+      //       selected.push(d);
+      //     });
+      //     config.drag(selected, d3.event);
+      // })
+      // .on("mouseout", function() {
+      //     if(d3.event.relatedTarget.tagName=='HTML') { svg.selectAll( "rect.selection").remove();
+      //     }
+      // });
 
       /**
        * Add events for tooltip
