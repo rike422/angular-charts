@@ -51,6 +51,7 @@ angular.module('angularCharts').directive('acChart', function($templateCache, $c
       mouseover: function() {},
       mouseout: function() {},
       click: function() {},
+      drag: function() {},
       legend: {
         display: true,
         //could be 'left, right'
@@ -59,6 +60,7 @@ angular.module('angularCharts').directive('acChart', function($templateCache, $c
       colors: ['steelBlue', 'rgb(255,153,0)', 'rgb(220,57,18)', 'rgb(70,132,238)', 'rgb(73,66,204)', 'rgb(0,128,0)'],
       innerRadius: 0, // Only on pie Charts
       lineLegend: 'lineEnd', // Only on line Charts
+      highlight: '#ffa500'
     };
 
     var totalWidth = element.width(), totalHeight = element.height();
@@ -241,15 +243,16 @@ angular.module('angularCharts').directive('acChart', function($templateCache, $c
       var svg = d3.select(chartContainer[0]).append("svg")
           .attr("width", width + margin.left + margin.right)
           .attr("height", height + margin.top + margin.bottom)
-        .append("g")
+      
+      var gTrans = svg.append("g")
           .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
-      svg.append("g")
+      gTrans.append("g")
           .attr("class", "x axis")
           .attr("transform", "translate(0," + height + ")")
           .call(xAxis);
 
-      svg.append("g")
+      gTrans.append("g")
           .attr("class", "y axis")
           .call(yAxis);
      
@@ -257,10 +260,11 @@ angular.module('angularCharts').directive('acChart', function($templateCache, $c
       * Add bars
       * @type {[type]}
       */
-      var barGroups = svg.selectAll(".state")
+      var barGroups = gTrans.selectAll(".state")
           .data(points)
         .enter().append("g")
           .attr("class", "g")
+          .attr("x", function(d) { return x(d.x); })
           .attr("transform", function(d) { return "translate(" + x(d.x) + ",0)"; });
 
       var bars = barGroups.selectAll("rect")
@@ -278,6 +282,95 @@ angular.module('angularCharts').directive('acChart', function($templateCache, $c
         .duration(1000)
         .attr("y", function(d) { return y(Math.max(0, d.y)); })
         .attr("height", function(d) { return Math.abs(y(d.y) - y(0)); });  
+
+      var drag = d3.behavior.drag()
+        .on("drag", function(d, i) {
+          var selection = d3.selectAll('.selected');
+          if (selection[0].indexOf(this) == -1) {
+            selection.classed("selected", false);
+            selection = d3.select(this);
+            selection.classed("selected", true);
+          }
+          d3.event.sourceEvent.stopPropagation();
+        });
+      svg.call(drag);
+
+      svg
+      .on("mousedown", function () {
+        var p = d3.mouse(this);
+        svg.append("rect")
+          .attr({
+            rx      : 6,
+            ry      : 6,
+            class   : "selection",
+            x       : p[0],
+            y       : p[1],
+            width   : 0,
+            height  : 0
+          })
+      })
+      .on("mousemove", function() {
+        var s = svg.select("rect.selection");
+        if(!s.empty()) {
+          var p = d3.mouse(this);
+          var d = {
+            x       : s.attr("x"),
+            y       : s.attr("y"),
+            width   : s.attr("width"),
+            height  : s.attr("height")
+          };
+          var move = {
+            x : p[0] - d.x,
+            y : p[1] - d.y
+          };
+
+          if(move.x < 1 || (move.x * 2 < d.width)) {
+            d.x = p[0];
+            d.width -= move.x;
+          } else {
+            d.width = move.x;       
+          }
+          if(move.y < 1 || (move.y * 2 < d.height)) {
+            d.y = p[1];
+            d.height -= move.y;
+          } else {
+            d.height = move.y;       
+          }
+          s.attr(d);
+          var xMin = s.attr("x") - margin.left
+          var xMax = xMin + parseFloat(s.attr("width"))
+
+          svg.selectAll('g.g.selected')
+              .classed("selected", false)
+            .selectAll("rect")
+              .style("fill", function(d) { return getColor(d.s); })
+          svg.selectAll('g.g').each( function(d, i) {
+            var x = d3.select(this).attr("x");
+            if ( 
+                !d3.select(this).classed("selected") && 
+                x >= xMin && x <= xMax
+            ) {
+              d3.select(this)
+                .classed("selected", true)
+              .selectAll("rect")
+                .style("fill", config.highlight)
+            }
+          });
+        }
+      })
+      .on("mouseup", function() {
+          svg.selectAll("rect.selection").remove();
+          var selected = [];
+          svg.selectAll("g.g.selected").each(function (d, i) {
+            selected.push(d);
+          });
+          config.drag(selected, d3.event);
+      })
+      .on("mouseout", function() {
+          if(d3.event.relatedTarget.tagName=='HTML') { svg.selectAll( "rect.selection").remove();
+          }
+      });
+
       /**
        * Add events for tooltip
        * @param  {[type]} d [description]
