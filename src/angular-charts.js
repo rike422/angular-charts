@@ -59,6 +59,7 @@ angular.module('angularCharts').directive('acChart', function($templateCache, $c
         position: 'left'
       },
       colors: ['steelBlue', 'rgb(255,153,0)', 'rgb(220,57,18)', 'rgb(70,132,238)', 'rgb(73,66,204)', 'rgb(0,128,0)'],
+      classes: ['set1', 'set2', 'set3', 'set3', 'set4', 'set5'],
       innerRadius: 0, // Only on pie Charts
       lineLegend: 'lineEnd', // Only on line Charts
       highlight: '#ffa500'
@@ -276,8 +277,8 @@ angular.module('angularCharts').directive('acChart', function($templateCache, $c
         
       bars.attr("x", function(d, i) { return x0(i); })
         .attr("y", height)
-        .style("fill", function(d) { return getColor(d.s); })
         .attr("height", 0)
+        .attr("class", function(d) { return getClass(d.s); })
       .transition()
         .ease("cubic-in-out")
         .duration(1000)
@@ -550,8 +551,8 @@ angular.module('angularCharts').directive('acChart', function($templateCache, $c
         
       bars.attr("y", function(d, i) { return y0(i); })
         .attr("x", 0)
-        .style("fill", function(d) { return getColor(d.s); })
         .attr("width", 0)
+        .attr("class", function(d) { return getClass(d.s); })
       .transition()
         .ease("cubic-in-out")
         .duration(1000)
@@ -694,8 +695,8 @@ angular.module('angularCharts').directive('acChart', function($templateCache, $c
         
       bars.attr("x", function(d, i) { return x(i); })
         .attr("y", height)
-        .style("fill", function(d) { return getColor(d.s); })
         .attr("height", 0)
+        .attr("class", function(d) { return getClass(d.s); })
       .transition()
         .ease("cubic-in-out")
         .duration(1000)
@@ -1291,7 +1292,8 @@ angular.module('angularCharts').directive('acChart', function($templateCache, $c
         chartType == 'hBar' || chartType == 'sBar' ||
         (chartType == 'line' && config.lineLegend === 'traditional')) {
         angular.forEach(series, function(value, key){
-          scope.legends.push({color : config.colors[key], title: value});
+          var cls = config.classes[key] + " " + "legend-box";
+          scope.legends.push({"class": cls, title: value});
         }); 
       }
     }
@@ -1309,6 +1311,14 @@ angular.module('angularCharts').directive('acChart', function($templateCache, $c
         var color = getRandomColor();
         config.colors.push(color);
         return color;
+      }
+    }
+
+    function getClass(i) {
+      if(i < config.classes.length) {
+        return config.classes[i]
+      } else {
+        return "";
       }
     }
 
