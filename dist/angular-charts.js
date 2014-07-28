@@ -758,10 +758,12 @@ angular.module('angularCharts').directive('acChart', [
          */
         if (linedata.length > 0) {
           var last = linedata[linedata.length - 1].values;
-          var totalLength = path.node().getTotalLength() + getX(last[last.length - 1].x);
-          path.attr('stroke-dasharray', totalLength + ' ' + totalLength).attr('stroke-dashoffset', totalLength).transition().duration(1500).ease('linear').attr('stroke-dashoffset', 0).attr('d', function (d) {
-            return line(d.values);
-          });
+          if (last.length > 0) {
+            var totalLength = path.node().getTotalLength() + getX(last[last.length - 1].x);
+            path.attr('stroke-dasharray', totalLength + ' ' + totalLength).attr('stroke-dashoffset', totalLength).transition().duration(1500).ease('linear').attr('stroke-dashoffset', 0).attr('d', function (d) {
+              return line(d.values);
+            });
+          }
         }
         /**
          * Add points
